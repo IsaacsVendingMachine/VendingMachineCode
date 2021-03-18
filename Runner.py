@@ -5,7 +5,7 @@ Made by yours truly, Woldorf Spernancus. If you dont know who this is... Thats s
 Sad but understandable, I will graduate soon.
 
 This was created as the 7th/8th graders can't be sold soda in school so the vending machine has just gone un used.
-The google sheet is how this code knows who to allow access to which buttons. The link for that is down below
+The google sheet is how this code knows who to allow access to which buttons. The link for that is down below.
 """
 import gspread, pygame, urllib.request, time
 import RPi.GPIO as GPIO # using RPi.GPIO

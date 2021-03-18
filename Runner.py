@@ -5,8 +5,10 @@ Made by yours truly, Woldorf Spernancus. If you dont know who this is... Thats s
 Sad but understandable, I will graduate soon.
 
 This was created as the 7th/8th graders can't be sold soda in school so the vending machine has just gone un used.
-The google sheet is how this code knows who to allow access to which buttons. The link for that is down below
+The google sheet is how this code knows who to allow access to which buttons.
+This will NOT work on a normal computer, it MUST be run on a RasberriePi to work
 """
+
 import gspread, pygame, urllib.request, time
 import RPi.GPIO as GPIO # using RPi.GPIO
 from oauth2client.service_account import ServiceAccountCredentials
@@ -92,7 +94,7 @@ def DrawSOSNoConnection():
     Window.blit(Text,(X,Y))
     Window.blit(SubText,(X2,Y2))
 
-    #return ConnectionTest()
+    return ConnectionTest()
   
 def DrawCardError():
     Window.fill(RED)
@@ -113,7 +115,7 @@ def DrawAchievement(Achievement):
     pass
 
 def main(StudentID):
-    StartTime = time.time()
+    StartTime = time.time() #Time from the moment the card was scanned. Will be used to have a delay the code X amount of time to allow people to input payment and make selection of soda
 
     try:
         Row = 1 #What row the bot has reached. Contrary to most other computer related things, this starts at line 1
@@ -154,21 +156,21 @@ def main(StudentID):
             Row += 1
         
         #Reset all pins/LEDs to off after a soda has been selected
-        """CurrentTime = time.time()
+        CurrentTime = time.time()
         while (CurrentTime - StartTime) < 3: #Give time to pay machine and get soda
             CurrentTime = time.time()
             if GPIO.input(40):
-                """
-        ConfirmedOrders["Amount"] += 1
-        #Update the metrics page
-        Placement = 1
-        for data in MetricsPage.col_values(1):
-            Placement += 1
-        #The amount of collumns plus 1 to go down and put it one below the lowest data
-        MetricsPage.update_cell(Placement, 1, StudentID) #Enter ID
-        MetricsPage.update_cell(Placement, 2, UserName) #Enter the Name
-        MetricsPage.update_cell(Placement, 3, time.asctime()) #Enter the time
-                #break
+                ConfirmedOrders["Amount"] += 1
+                #Update the metrics page
+                Placement = 1
+                for data in MetricsPage.col_values(1): #data is not needed, when running "MetricsPade.col_count it gave me 25 for some reason so this is my workaround for that"
+                    Placement += 1
+
+                #The amount of collumns plus 1 to go down and put it one below the lowest data
+                MetricsPage.update_cell(Placement, 1, StudentID) #Enter ID
+                MetricsPage.update_cell(Placement, 2, UserName) #Enter the Name
+                MetricsPage.update_cell(Placement, 3, time.asctime()) #Enter the time
+                break
         
         #Set all pins to off
         for Button in PinsList:
@@ -178,7 +180,6 @@ def main(StudentID):
         CardScans["Amount"] += 1
         UserPage.update_cell(ConfirmedOrders["Row"],ConfirmedOrders["Collumn"],ConfirmedOrders["Amount"])
         UserPage.update_cell(CardScans["Row"],CardScans["Collumn"],CardScans["Amount"])
-
 
         return ConnectionTest()
     except:

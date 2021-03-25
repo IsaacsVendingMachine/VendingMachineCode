@@ -8,11 +8,11 @@ This was created as the 7th/8th graders can't be sold soda in school so the vend
 The google sheet is how this code knows who to allow access to which buttons.
 This will NOT work on a normal computer, it MUST be run on a RasberriePi to work
 """
-
-import gspread, pygame, urllib.request, time
+import gspread, pygame, urllib.request, time, sys
 import RPi.GPIO as GPIO # using RPi.GPIO
 from oauth2client.service_account import ServiceAccountCredentials
 from pygame.locals import *
+from _thread import *
 
 #disable the warnings displayed when activating the GPIO pins
 GPIO.setwarnings(False) 
@@ -21,11 +21,14 @@ GPIO.setwarnings(False)
 pygame.init()
 pygame.display.set_caption("Isaacs Very Nice Vending Machine")
 
-#Temporary screen variables
-ScreenWidth = 500
-ScreenHeight = 500
+#Create a window object
+Window = pygame.display.set_mode((500,500))
+#Make Window fullscreen
+#pygame.display.toggle_fullscreen()
 
-Window = pygame.display.set_mode((ScreenWidth,ScreenHeight))
+#Temporary screen variables
+ScreenWidth = pygame.display.Info().current_w
+ScreenHeight = pygame.display.Info().current_h
 
 #Setup some fonts to use
 FONT = pygame.font.Font("airstrike.ttf", 80)
@@ -37,6 +40,7 @@ Sheet = Client.open("Vending Machine Manager Settings")
 UserPage = Sheet.worksheet("Users")
 MetricsPage = Sheet.worksheet("Data Metrics")
 ProfilePage = Sheet.worksheet("Profiles")
+SettingsPage = Sheet.worksheet("Settings")
 
 #Colors available for drawing
 NAVYBLUE  = ( 60,  60, 100)
@@ -60,6 +64,80 @@ SODAPinList = [38,36,32,31,26,24,22,18,16,12]
 #Configure all pins to be output except 40
 GPIO.setup(PinsList, GPIO.OUT) 
 GPIO.setup(40,GPIO.IN) #Motion sensor input
+#PinVariables 
+Active = False
+Inactive = True
+#Set all pins off 
+for pin in PinsList:
+    GPIO.output(pin, Inactive)
+    
+global AfterHoursProfile, OVERRIDE, AfterHours
+AfterHoursProfile = "7"
+
+#Threaded function that just checkes the time
+def ThreadedTimeChecker():
+    global AfterHoursProfile, AfterHours
+    while True:
+        Row = 1
+        Breaker = False
+        AfterHours = False
+        #Check the collum for the date
+        for data in SettingsPage.col_values(1):
+            if data == "OVERRIDE PROFILE": #Check if the override is active
+                Collumn = 1
+                for Profile in SettingsPage.row_values(Row)[1:]:
+                    if Collumn == 1 and Profile:
+                        OVERRIDE = True
+                    else:
+                        OVERRIDE = False
+
+                    if Collumn == 3 and OVERRIDE:
+                        AfterHoursProfile = Profile
+                        
+                    Collumn += 1
+
+            elif data == time.strftime("%A"): #Check if the day matches
+                Collumn = 1
+                for setting in SettingsPage.row_values(Row)[1:]:      
+                    if Collumn == 1:
+                        TimeList = []
+                        TimeSetting = ""
+                        #Parse through each setting and get the individual times
+                        for character in setting:
+                            if character == ":":
+                                TimeList.append(TimeSetting)
+                                TimeSetting = ""
+                            else:
+                                TimeSetting += character
+                    
+                        TimeList.append(TimeSetting)
+                            
+                        #CHECK IF THE CURRENT TIME IS INBETWEEN THE SETTING IN GOOGLE SHEETS AND MIDNIGHT
+                        #%H is the Hour
+                        #%M is the Minute
+                        #%p is the PM/AM indicator
+                        print(time.strftime("%H"))
+                        if (int(TimeList[0]) < int(time.strftime("%H"))):
+                            AfterHours = True
+                        elif (int(TimeList[0]) == int(time.strftime("%H"))):
+                            if int(TimeList[1]) <= int(time.strftime("%M")):
+                                AfterHours = True               
+                        
+                        else:
+                            AfterHours = False
+                            
+                    elif Collumn == 3:
+                        AfterHoursProfile = setting
+                        
+                    print(time.strftime("%H"),time.strftime("%M"))
+                        
+                    Collumn += 1
+            Row += 1
+            
+            if Breaker:
+                break
+        
+        time.sleep(60)
 
 #Function to check internet connection by connecting to google.com
 def ConnectionTest(host='http://google.com'):
@@ -111,53 +189,72 @@ def DrawCardError():
     Window.blit(Text,(X,Y))
     Window.blit(SubText,(X2,Y2))
 
-def DrawAchievement(Achievement):
-    pass
-
 def main(StudentID):
+    #Row and Collumn are variables used to designate the row and collumn the bot is currently on when doing its nested for loops
     StartTime = time.time() #Time from the moment the card was scanned. Will be used to have a delay the code X amount of time to allow people to input payment and make selection of soda
-
+    print(StartTime,"CHECK 1")
     try:
-        Row = 1 #What row the bot has reached. Contrary to most other computer related things, this starts at line 1
-        for value in UserPage.col_values(1): #Only check the ID collumn
+        #Get the delay amount and the time until override time
+        Row = 2
+        for data in SettingsPage.col_values(1)[1:]:
+            if data == "Profile Activation Timer": #Get the delay
+                Collumn = 1
+                for setting in SettingsPage.row_values(Row)[1:]:
+                    if Collumn == 1:
+                        Delay = int(setting) #You have to make sure this is an integer and not a string
+                    else:
+                        if setting == "minutes":
+                            Delay = Delay * 60 #Multiply this to get the seconds count
+                        elif setting == "hours":
+                            Delay = Delay * 3600 #Multiply this to get the seconds count
+                    Collumn += 1
+            Row += 1
+        
+        Row = 2
+        Breaker = False
+        #Geth the user profile data NOT which buttons are allowed
+        for value in UserPage.col_values(1)[1:]: #Only check the ID collumn
             if StudentID == value:
                 Collumn = 1 #What Collumn the bot is on
                 for Info in UserPage.row_values(Row)[1:]: #From collumn B onwards
                     #print(Info,Collumn)
                     if Collumn == 1:
                         UserName = Info
-                        print(UserName)
-                    elif Collumn == 2: #Collumn 2 is where the profile data is
+                    elif Collumn == 2 and not OVERRIDE: #Collumn 2 is where the profile data is
                         UserProfile = Info
-                        print(UserProfile)
                     elif Collumn == 3: #Collumn 4 is the persons amount of sodas ordered
                         ConfirmedOrders = {"Amount":int(Info),"Row":Row,"Collumn":Collumn + 1}
-                        print(ConfirmedOrders)
                     elif Collumn == 4: #Scans of the card
                         CardScans = {"Amount":int(Info),"Row":Row,"Collumn":Collumn + 1}
-                        print(CardScans)
-                    #Incriment the placements
+                        #Incriment the placements
                     Collumn += 1
+                    Breaker = True
+                    
             Row += 1
+            
+            if Breaker:
+                break
 
-        #Get what buttons/LEDs are allowed based on the profile of the user ID
-        Row = 1
-        for Profile in ProfilePage.col_values(1):
+        print(time.time(),"CHECK 2")
+
+        #Get what buttons/LEDs are allowed based on the profile of the user ID AND set them
+        Row = 2
+        for Profile in ProfilePage.col_values(1)[1:]:
             if Profile == UserProfile:                 
                 ButtonNumber = 0
                 for Button in ProfilePage.row_values(Row)[1:]:
                     if Button: #If the button is cleared, turn on the LED and Button
-                        GPIO.output(LEDPinList[ButtonNumber], True)
-                        GPIO.output(SODAPinList[ButtonNumber], True)
+                        GPIO.output(LEDPinList[ButtonNumber], Inactive)
+                        GPIO.output(SODAPinList[ButtonNumber], Inactive)
                     else: #Otherwise, make sure they're off
-                        GPIO.output(LEDPinList[ButtonNumber], False)
-                        GPIO.output(SODAPinList[ButtonNumber], False)
+                        GPIO.output(LEDPinList[ButtonNumber], Active)
+                        GPIO.output(SODAPinList[ButtonNumber], Active)
                     ButtonNumber +=1
             Row += 1
         
         #Reset all pins/LEDs to off after a soda has been selected
         CurrentTime = time.time()
-        while (CurrentTime - StartTime) < 3: #Give time to pay machine and get soda
+        while (CurrentTime - StartTime) < Delay: #Give time to pay machine and get soda
             CurrentTime = time.time()
             if GPIO.input(40):
                 ConfirmedOrders["Amount"] += 1
@@ -174,7 +271,7 @@ def main(StudentID):
         
         #Set all pins to off
         for Button in PinsList:
-            GPIO.output(Button, False)
+            GPIO.output(Button, Inactive)
 
         #Update that the card was scanned:
         CardScans["Amount"] += 1
@@ -190,6 +287,8 @@ Connected = ConnectionTest() #Initial connection test
 Angle = 0
 StudentID = ""
 
+start_new_thread(ThreadedTimeChecker,())
+
 while True:
     #Connected = ConnectionTest()
     #print(time.strftime("%I")) Hour
@@ -203,10 +302,13 @@ while True:
                 if event.key == K_RETURN: #If the key was ENTER
                     Connected = main(StudentID) #Take the StudentID to set buttons and such
                     print(StudentID)
-                    StudentID = "" #Reset the Student ID as it was taken in by the main() function
+                    StudentID = "" #Reset the Student ID as it was taken in by the main() function         
                 else:
                     StudentID += (pygame.key.name(event.key)) #Add all other inputs to the StudentID
-
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                pygame.quit()
+                sys.exit()
+                
         #Uncomment these 2 lines and the one mentioned in the DrawBeforeEnter() function to have the start screen rotate cause I'm a weezord
         #Angle += 5
         #pygame.time.Clock().tick(15)

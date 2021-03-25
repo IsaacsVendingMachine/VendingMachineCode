@@ -5,8 +5,12 @@ Made by yours truly, Woldorf Spernancus. If you dont know who this is... Thats s
 Sad but understandable, I will graduate soon.
 
 This was created as the 7th/8th graders can't be sold soda in school so the vending machine has just gone un used.
+<<<<<<< HEAD
 The google sheet is how this code knows who to allow access to which buttons.
 This will NOT work on a normal computer, it MUST be run on a RasberriePi to work
+=======
+The google sheet is how this code knows who to allow access to which buttons. The link for that is down below.
+>>>>>>> 884ce2f4fc4d9ed432f767c3a46cbe8c46f1368d
 """
 import gspread, pygame, urllib.request, time, sys
 import RPi.GPIO as GPIO # using RPi.GPIO

@@ -5,12 +5,11 @@ Made by yours truly, Woldorf Spernancus. If you dont know who this is... Thats s
 Sad but understandable, I will graduate soon.
 
 This was created as the 7th/8th graders can't be sold soda in school so the vending machine has just gone un used.
-<<<<<<< HEAD
+
 The google sheet is how this code knows who to allow access to which buttons.
 This will NOT work on a normal computer, it MUST be run on a RasberriePi to work
-=======
+
 The google sheet is how this code knows who to allow access to which buttons. The link for that is down below.
->>>>>>> 884ce2f4fc4d9ed432f767c3a46cbe8c46f1368d
 """
 import gspread, pygame, urllib.request, time, sys
 import RPi.GPIO as GPIO # using RPi.GPIO
@@ -30,12 +29,17 @@ Window = pygame.display.set_mode((500,500))
 #Make Window fullscreen
 #pygame.display.toggle_fullscreen()
 
-#Temporary screen variables
+#Screen variables
 ScreenWidth = pygame.display.Info().current_w
 ScreenHeight = pygame.display.Info().current_h
 
+#Background variable:
+Background = pygame.image.load("OriginalBackground.png")
+Background = pygame.transform.scale(Background,(ScreenWidth,ScreenHeight))
+
 #Setup some fonts to use
-FONT = pygame.font.Font("airstrike.ttf", 80)
+FONT = pygame.font.Font("airstrike.ttf", 300)
+SMALLFONT = pygame.font.Font("airstrike.ttf",200)
 
 #Setup the sheet data
 Client = gspread.service_account()
@@ -75,12 +79,49 @@ Inactive = True
 for pin in PinsList:
     GPIO.output(pin, Inactive)
     
-global AfterHoursProfile, OVERRIDE, AfterHours
+global AfterHoursProfile, OVERRIDE, AfterHours, DefaultProfile
 AfterHoursProfile = "7"
+DefaultProfile = "Guest"
+
+
+#Make a User class:
+class UserClass():
+    def __init__(self,Scans,Orders,FirstName,Profile,ID,FullName):
+        self.scans = Scans
+        self.orders = Orders
+        self.firstname = FirstName
+        self.fullname = FullName
+        self.profile = Profile
+        self.ID = ID
+        self.buttonCount = 0
+        self.buttonList = []
+
+    def ScanUpdateSheet(self):
+        UserPage.update_cell(self.scans["Row"],self.scans["Collumn"],(self.scans["Amount"] + 1))
+
+    def OrderUpdateSheet(self):
+        self.orders["Amount"] += 1
+        #Update the metrics page
+        Placement = 1
+        for data in MetricsPage.col_values(1):
+            Placement += 1
+        #The amount of collumns plus 1 to go down and put it one below the lowest data
+        MetricsPage.update_cell(Placement, 1, self.ID) #Enter ID
+        MetricsPage.update_cell(Placement, 2, self.fullname) #Enter the Name
+        MetricsPage.update_cell(Placement, 3, time.strftime("%x")) #Enter the date
+        MetricsPage.update_cell(Placement, 4, time.strftime("%X")) #Enter the time
+        
+        UserPage.update_cell(self.orders["Row"],self.orders["Collumn"],self.orders["Amount"])
+    
+class DefaultUserClass():
+    def __init__(self, DefaultProfile):
+        self.profile = DefaultProfile
+        self.buttonList = []
+        self.buttonCount = 0
 
 #Threaded function that just checkes the time
 def ThreadedTimeChecker():
-    global AfterHoursProfile, AfterHours
+    global AfterHoursProfile, AfterHours, DefaultProfile, OVERRIDE
     while True:
         Row = 1
         Breaker = False
@@ -120,7 +161,6 @@ def ThreadedTimeChecker():
                         #%H is the Hour
                         #%M is the Minute
                         #%p is the PM/AM indicator
-                        print(time.strftime("%H"))
                         if (int(TimeList[0]) < int(time.strftime("%H"))):
                             AfterHours = True
                         elif (int(TimeList[0]) == int(time.strftime("%H"))):
@@ -133,9 +173,15 @@ def ThreadedTimeChecker():
                     elif Collumn == 3:
                         AfterHoursProfile = setting
                         
-                    print(time.strftime("%H"),time.strftime("%M"))
+                    #print(time.strftime("%H"),time.strftime("%M"))
                         
                     Collumn += 1
+                    
+            elif data == "DEFAULT PROFILE":
+               for setting in SettingsPage.row_values(Row)[1:]:
+                   if setting != None:
+                       DefaultProfile = setting
+                    
             Row += 1
             
             if Breaker:
@@ -152,12 +198,10 @@ def ConnectionTest(host='http://google.com'):
         return False
 
 def DrawBeforeEnter(Angle = None):
-    Window.fill(RED)
-    Text = FONT.render("SCAN CARD",True,(BLUE))
-
+    Window.blit(Background,(0,0))
+    Text = FONT.render("SCAN CARD",True,(WHITE))
     #Uncomment this line and the one in the while loop that runs everything to have the words onscreen rotate
     #Text = pygame.transform.rotate(Text,Angle)
-
     Window.blit(Text,((ScreenWidth/2 - Text.get_rect().width/2),(ScreenHeight/2 - Text.get_rect().height/2)))
 
 def DrawSOSNoConnection():
@@ -179,9 +223,9 @@ def DrawSOSNoConnection():
     return ConnectionTest()
   
 def DrawCardError():
-    Window.fill(RED)
-    Text = FONT.render("ERROR",True,BLUE)
-    SubText = FONT.render("PLEASE SCAN AGAIN",True,BLUE)
+    Window.blit(Background,(0,0))
+    Text = FONT.render("ERROR",True,WHITE)
+    SubText = SMALLFONT.render("NOT RECOGNIZED",True,WHITE)
 
     #Cordinates for Text
     X = ((ScreenWidth/2) - (Text.get_rect().width/2))
@@ -192,99 +236,102 @@ def DrawCardError():
 
     Window.blit(Text,(X,Y))
     Window.blit(SubText,(X2,Y2))
+    
+def DrawWelcome(Name):    
+    Window.blit(Background,(0,0))
+    Text = FONT.render("SELECT SODA",True,WHITE)
+    Welcome = SMALLFONT.render("WELCOME BACK",True,WHITE)
+    Name = SMALLFONT.render(Name,True,WHITE)
+    
+    #Cordinates for Text
+    X = ((ScreenWidth/2) - (Text.get_rect().width/2))
+    Y = (ScreenHeight/3) - (Text.get_rect().height/2)
+    #Cordinates for Welcome
+    X2 = ((ScreenWidth/2) - (Welcome.get_rect().width/2))
+    Y2 = (ScreenHeight - (ScreenHeight/3) - (Welcome.get_rect().height/2))
+    #Cordinated for Name
+    X3 = ((ScreenWidth/2) - (Name.get_rect().width/2))
+    Y3 = (ScreenHeight - (ScreenHeight/5) - (Name.get_rect().height/2))
+    
+    Window.blit(Text,(X,Y))
+    Window.blit(Welcome,(X2,Y2))
+    Window.blit(Name,(X3,Y3))
+
+def GetDefaultUser():
+    #Make the Default User class to pass around:
+    Default = DefaultUserClass(DefaultProfile)
+    #Locate the data on the ProfileSetting page which matches the default user name:
+    ProfileSetting = ProfilePage.find(Default.profile)
+
+    for Info in ProfilePage.row_values(ProfileSetting.row)[1:]:
+        Default.buttonList.append(Info)
+        if Info:
+            Default.buttonCount += 1
+    return Default
 
 def main(StudentID):
+    global OVERRIDE
     #Row and Collumn are variables used to designate the row and collumn the bot is currently on when doing its nested for loops
-    StartTime = time.time() #Time from the moment the card was scanned. Will be used to have a delay the code X amount of time to allow people to input payment and make selection of soda
-    print(StartTime,"CHECK 1")
+    #Get the delay amount and the time until override time
+    Settings = SettingsPage.find("Profile Activation Timer")
+
+    #Get the delay
+    Collumn = 1
+    for setting in SettingsPage.row_values(Settings.row)[1:]:
+        if Collumn == 1:
+            Delay = int(setting) #You have to make sure this is an integer and not a string
+        else:
+            if setting == "minutes":
+                Delay = Delay * 60 #Multiply this to get the seconds count
+            elif setting == "hours":
+                Delay = Delay * 3600 #Multiply this to get the seconds count
+        Collumn += 1
+
+    #Get the user data
     try:
-        #Get the delay amount and the time until override time
-        Row = 2
-        for data in SettingsPage.col_values(1)[1:]:
-            if data == "Profile Activation Timer": #Get the delay
-                Collumn = 1
-                for setting in SettingsPage.row_values(Row)[1:]:
-                    if Collumn == 1:
-                        Delay = int(setting) #You have to make sure this is an integer and not a string
-                    else:
-                        if setting == "minutes":
-                            Delay = Delay * 60 #Multiply this to get the seconds count
-                        elif setting == "hours":
-                            Delay = Delay * 3600 #Multiply this to get the seconds count
-                    Collumn += 1
-            Row += 1
-        
-        Row = 2
-        Breaker = False
-        #Geth the user profile data NOT which buttons are allowed
-        for value in UserPage.col_values(1)[1:]: #Only check the ID collumn
-            if StudentID == value:
-                Collumn = 1 #What Collumn the bot is on
-                for Info in UserPage.row_values(Row)[1:]: #From collumn B onwards
-                    #print(Info,Collumn)
-                    if Collumn == 1:
-                        UserName = Info
-                    elif Collumn == 2 and not OVERRIDE: #Collumn 2 is where the profile data is
-                        UserProfile = Info
-                    elif Collumn == 3: #Collumn 4 is the persons amount of sodas ordered
-                        ConfirmedOrders = {"Amount":int(Info),"Row":Row,"Collumn":Collumn + 1}
-                    elif Collumn == 4: #Scans of the card
-                        CardScans = {"Amount":int(Info),"Row":Row,"Collumn":Collumn + 1}
-                        #Incriment the placements
-                    Collumn += 1
-                    Breaker = True
-                    
-            Row += 1
-            
-            if Breaker:
-                break
-
-        print(time.time(),"CHECK 2")
-
-        #Get what buttons/LEDs are allowed based on the profile of the user ID AND set them
-        Row = 2
-        for Profile in ProfilePage.col_values(1)[1:]:
-            if Profile == UserProfile:                 
-                ButtonNumber = 0
-                for Button in ProfilePage.row_values(Row)[1:]:
-                    if Button: #If the button is cleared, turn on the LED and Button
-                        GPIO.output(LEDPinList[ButtonNumber], Inactive)
-                        GPIO.output(SODAPinList[ButtonNumber], Inactive)
-                    else: #Otherwise, make sure they're off
-                        GPIO.output(LEDPinList[ButtonNumber], Active)
-                        GPIO.output(SODAPinList[ButtonNumber], Active)
-                    ButtonNumber +=1
-            Row += 1
-        
-        #Reset all pins/LEDs to off after a soda has been selected
-        CurrentTime = time.time()
-        while (CurrentTime - StartTime) < Delay: #Give time to pay machine and get soda
-            CurrentTime = time.time()
-            if GPIO.input(40):
-                ConfirmedOrders["Amount"] += 1
-                #Update the metrics page
-                Placement = 1
-                for data in MetricsPage.col_values(1): #data is not needed, when running "MetricsPade.col_count it gave me 25 for some reason so this is my workaround for that"
-                    Placement += 1
-
-                #The amount of collumns plus 1 to go down and put it one below the lowest data
-                MetricsPage.update_cell(Placement, 1, StudentID) #Enter ID
-                MetricsPage.update_cell(Placement, 2, UserName) #Enter the Name
-                MetricsPage.update_cell(Placement, 3, time.asctime()) #Enter the time
-                break
-        
-        #Set all pins to off
-        for Button in PinsList:
-            GPIO.output(Button, Inactive)
-
-        #Update that the card was scanned:
-        CardScans["Amount"] += 1
-        UserPage.update_cell(ConfirmedOrders["Row"],ConfirmedOrders["Collumn"],ConfirmedOrders["Amount"])
-        UserPage.update_cell(CardScans["Row"],CardScans["Collumn"],CardScans["Amount"])
-
-        return ConnectionTest()
+        Profile = UserPage.find(StudentID)
+        User = "Filler"
     except:
-        return ConnectionTest()
+        User = None
+    
+    if User != None:    
+        Collumn = 1
+        for Info in UserPage.row_values(Profile.row)[1:]: #From collumn B onwards
+            print(Info, Collumn)
+            if Collumn == 1:
+                LastName = Info
+            elif Collumn == 2:
+                FirstName = Info
+            elif Collumn == 3 and not OVERRIDE: #Collumn 2 is where the profile data is
+                UserProfile = Info
+            elif Collumn == 4: #Collumn 4 is the persons amount of sodas ordered
+                ConfirmedOrders = {"Amount":int(Info),"Row":Profile.row,"Collumn":Collumn + 1}
+            elif Collumn == 5: #Scans of the card
+                CardScans = {"Amount":int(Info),"Row":Profile.row,"Collumn":Collumn + 1}
+            
+            #Incriment the placements
+            Collumn += 1     
+        try:
+            User = UserClass(CardScans,ConfirmedOrders,FirstName,UserProfile,StudentID,(FirstName + " " + LastName))
+        except:
+            ConfirmedOrders
+            = {"Amount":int(0),"Row":Profile.row,"Collumn":UserPage.find("Verified Purchases").col}
+            CardScans = {"Amount":int(0),"Row":Profile.row,"Collumn":UserPage.find("Barcode Scans").col}
+            User = UserClass(CardScans,ConfirmedOrders,FirstName,UserProfile,StudentID,(FirstName + " " + LastName))
+            
+        Profile = ProfilePage.find(User.profile)
+
+        for Info in ProfilePage.row_values(Profile.row)[1:]:
+            User.buttonList.append(Info)
+            if Info:
+                User.buttonCount += 1
+                
+        #Update the spreadsheet
+        User.ScanUpdateSheet()
+        print(User.fullname)
+        
+    UserDefault = GetDefaultUser()
+    return ConnectionTest(), Delay, User, UserDefault, time.time()
 
 #Some base variables before the loop begins
 Connected = ConnectionTest() #Initial connection test
@@ -292,26 +339,110 @@ Angle = 0
 StudentID = ""
 
 start_new_thread(ThreadedTimeChecker,())
+UserDefault = GetDefaultUser()
+ScanTime = 0
+ErrorTime = 0
+CardError = False
+Scanned = False
+DrawingName = False
+
 
 while True:
+    CurrentTime = time.time()
     #Connected = ConnectionTest()
-    #print(time.strftime("%I")) Hour
-    #print(time.strftime("%M")) Minutes
-
+    
+    DrawBeforeEnter(Angle)
     if Connected:
-        DrawBeforeEnter(Angle)
         #For every event that pygame detects:
         for event in pygame.event.get():
             if event.type == KEYDOWN: #If a key was pressed
                 if event.key == K_RETURN: #If the key was ENTER
-                    Connected = main(StudentID) #Take the StudentID to set buttons and such
-                    print(StudentID)
-                    StudentID = "" #Reset the Student ID as it was taken in by the main() function         
+                    Connected, Delay, User, UserDefault, ScanTime = main(StudentID) #Take the StudentID to set buttons and such
+                    print(UserDefault.buttonList)
+                    if User != None: 
+                        Scanned = True
+                    else:
+                        CardError
+                        ErrorTime = time.time()
+                    StudentID = "" #Reset the Student ID as it was taken in by the main() function                   
+                elif event.key == K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
                 else:
                     StudentID += (pygame.key.name(event.key)) #Add all other inputs to the StudentID
-            elif event.type == KEYDOWN and event.key == K_ESCAPE:
-                pygame.quit()
-                sys.exit()
+        
+        if Scanned and (CurrentTime - (ScanTime + 4) <= Delay) and User != None:
+            DrawingName = True
+            if User.buttonCount >= UserDefault.buttonCount:
+                Placement = 0
+                for LED in LEDPinList:
+                    if User.buttonList[Placement]:
+                        GPIO.output(LED, Active)
+                    else:
+                        GPIO.output(LED, Inactive)
+                    #print(User.buttonList[Placement])
+                    Placement += 1
+                          
+                Placement = 0
+                for Button in SODAPinList:
+                    if User.buttonList[Placement]:
+                        GPIO.output(Button, Active)
+                    else:
+                        GPIO.output(Button, Inactive)
+                    Placement += 1
+            
+            else:
+                Placement = 0
+                for LED in LEDPinList:
+                    if UserDefault.buttonList[Placement]:
+                        GPIO.output(LED, Active)
+                    else:
+                        GPIO.output(LED, Inactive)
+                    Placement += 1
+
+                Placement = 0
+                for Button in SODAPinList:
+                    if UserDefault.buttonList[Placement]:
+                        GPIO.output(Button, Active)
+                    else:
+                        GPIO.output(Button, Inactive)
+                        
+                    #print(UserDefault.buttonList[Placement])
+                    Placement += 1
+
+            #Update the metrics page if the sensor pin is triggered with a True
+            if GPIO.input(40):
+                User.OrderUpdateSheet()
+                Scanned = False
+        else:
+            DrawingName = False
+            Placement = 0
+            for LED in LEDPinList:
+                if UserDefault.buttonList[Placement]:
+                    GPIO.output(LED, Active)
+                else:
+                    GPIO.output(LED, Inactive)
+                Placement += 1
+                
+            Placement = 0
+            for Button in SODAPinList:
+                if UserDefault.buttonList[Placement]:
+                    GPIO.output(Button, Active)
+                else:
+                    GPIO.output(Button, Inactive)            
+                
+                #print(UserDefault.buttonList[Placement])
+                Placement += 1
+                
+                
+        if CurrentTime - ErrorTime <= 2 and not CardError:
+            DrawCardError()
+        else:
+            CardError = False
+            if DrawingName:
+                DrawWelcome(User.firstname)
+            else:
+                DrawBeforeEnter(Angle)
                 
         #Uncomment these 2 lines and the one mentioned in the DrawBeforeEnter() function to have the start screen rotate cause I'm a weezord
         #Angle += 5
